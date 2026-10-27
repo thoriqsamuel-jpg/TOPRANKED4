@@ -55,6 +55,16 @@ ol.list{list-style:none;margin:0;padding:0;background:var(--surface);border:1px 
 @media (max-width:420px){.pod{padding-left:3px;padding-right:3px}.av{width:44px;height:44px}.p1 .av{width:56px;height:56px}.stats{font-size:.7rem}}
 .lnk{background:none;border:0;color:var(--navy);font:inherit;text-decoration:underline;cursor:pointer;padding:8px 0}
 #admin{display:none}
+.tabs{display:flex;gap:6px;margin-bottom:14px}
+.tabs button{flex:1;padding:10px 8px;border-radius:10px;border:1px solid var(--line);background:var(--surface);color:var(--ink);font:inherit;font-weight:600;font-size:.9rem;cursor:pointer}
+.tabs button.on{background:var(--navy);color:var(--bg);border-color:var(--navy)}
+.tabs button:focus-visible{outline:3px solid var(--navy);outline-offset:2px}
+.row.t1{border-left:4px solid var(--gold)}.row.t2{border-left:4px solid var(--silver)}.row.t3{border-left:4px solid var(--bronze)}
+.rk.m{display:inline-grid;place-items:center;width:30px;height:30px;border-radius:50%;color:#fff;margin:0 auto}
+.rk.m1{background:var(--gold)}.rk.m2{background:var(--silver)}.rk.m3{background:var(--bronze)}
+.tt{display:inline-block;margin-left:6px;padding:0 7px;border-radius:99px;font-size:.68rem;font-weight:600;background:var(--gold-bg);color:var(--ink);border:1px solid var(--gold)}
+.sc small{display:block;font-weight:600;font-size:.68rem;color:var(--muted)}
+.atitle{margin:0 0 4px;font-size:1.05rem}
 </style>
 </head>
 <body>
@@ -62,6 +72,7 @@ ol.list{list-style:none;margin:0;padding:0;background:var(--surface);border:1px 
   <h1>Top Rank MagangHub</h1>
   <p class="sub">Peringkat peserta MagangHub Bapas Kelas II Ciangir per periode, berdasarkan kedisiplinan absensi.</p>
   <div class="rule"><b>Syarat Peringkat 1:</b> absensi penuh dalam satu periode, tanpa izin, tanpa bolos, dan tanpa lupa absen. Peserta dengan skor sama berbagi peringkat yang sama.</div>
+  <div class="tabs" role="tablist"><button id="tab-p" class="on" type="button" role="tab">Per periode</button><button id="tab-a" type="button" role="tab">Rata-rata semua periode</button></div>
   <div class="nav"><button id="prev" type="button" aria-label="Periode sebelumnya">‹</button><div><b id="pt"></b><span id="pd"></span></div><button id="next" type="button" aria-label="Periode berikutnya">›</button></div>
   <div id="rank"></div>
 
@@ -82,7 +93,7 @@ const today=new Date();today.setHours(0,0,0,0);
 const per=k=>({s:new Date(2026,7+k,10),e:new Date(2026,8+k,9)});
 const fd=d=>d.getDate()+' '+BLN[d.getMonth()]+' '+d.getFullYear();
 const $=id=>document.getElementById(id);
-let data={},cur=0,pw=null,admin=false,timer=null;
+let data={},cur=0,pw=null,admin=false,timer=null,view='p';
 for(let k=0;k<6;k++)if(per(k).s<=today)cur=k;
 function rec(k,n){return (data[k]&&data[k][n])||{}}
 function tally(k,n){const r=rec(k,n),t={i:+r.i||0,b:+r.b||0,l:+r.l||0};t.pen=t.i*5+t.b*15+t.l*3;t.score=100-t.pen;t.n=n;return t}
@@ -104,7 +115,7 @@ function pod(g,rank){
   if(g.length===1)h+=`<div class="stats">${st(g[0])}</div>`;
   return h+'</div>';
 }
-function renderRank(){
+function renderPeriod(){
   const {s,e}=per(cur);
   document.getElementById('pt').textContent='Periode '+(cur+1);
   document.getElementById('pd').textContent=fd(s)+' - '+fd(e);
@@ -127,9 +138,38 @@ function renderEditor(){
 
 function setMode(msg){
   $('mode').textContent=msg||'Mode pengelola: perubahan disimpan otomatis ke server.';
-  $('admin').style.display=admin?'block':'none';
+  $('admin').style.display=(admin&&view==='p')?'block':'none';
   $('login').textContent=admin?'Keluar pengelola':'Masuk pengelola';
 }
+function avgData(){
+  const ks=[];for(let k=0;k<6;k++)if(per(k).s<=today)ks.push(k);
+  const rows=NAMES.map(n=>{let sum=0,i=0,b=0,l=0;ks.forEach(k=>{const t=tally(k,n);sum+=t.score;i+=t.i;b+=t.b;l+=t.l});
+    return {n,avg:ks.length?Math.round(sum/ks.length*100)/100:0,i,b,l}});
+  rows.sort((x,y)=>y.avg-x.avg||x.b-y.b||x.i-y.i||x.l-y.l||x.n.localeCompare(y.n));
+  let rank=0;
+  rows.forEach((r,idx)=>{const p=rows[idx-1];rank=(p&&p.avg===r.avg&&p.b===r.b&&p.i===r.i&&p.l===r.l)?rank:idx+1;r.rank=rank});
+  return {rows,count:ks.length};
+}
+function renderAvg(){
+  const {rows,count}=avgData(),el=$('rank');
+  if(!count){el.innerHTML='<div class="note">Magang belum dimulai. Rata-rata muncul setelah periode 1 berjalan.</div>';return}
+  const lis=rows.map(r=>{
+    const t=r.rank<=3?' t'+r.rank:'';
+    const rk=r.rank<=3?`<div class="rk m m${r.rank}">${r.rank}</div>`:`<div class="rk">${r.rank}</div>`;
+    return `<li class="row${t}">${rk}<div><div class="nm">${r.n}${r.rank<=3?'<span class="tt">Top tier</span>':''}</div><div class="stats">Total: Izin ${r.i}, Bolos ${r.b}, Lupa ${r.l}</div></div><div class="sc">${+r.avg.toFixed(2)}<small>rata-rata</small></div></li>`}).join('');
+  el.innerHTML=`<h2 class="atitle">Peringkat rata-rata skor</h2><p class="hint">Dihitung dari ${count} periode yang sudah berjalan (periode berjalan ikut dihitung). Skor sama dibedakan dari jumlah bolos, lalu izin, lalu lupa absen. Jika masih sama, peringkatnya sama.</p><ol class="list">${lis}</ol>`;
+}
+function renderRank(){view==='a'?renderAvg():renderPeriod()}
+function setView(v){
+  view=v;
+  $('tab-p').classList.toggle('on',v==='p');$('tab-a').classList.toggle('on',v==='a');
+  $('tab-p').setAttribute('aria-selected',v==='p');$('tab-a').setAttribute('aria-selected',v==='a');
+  document.querySelector('.nav').style.display=v==='p'?'':'none';
+  $('admin').style.display=(admin&&v==='p')?'block':'none';
+  renderAll();
+}
+$('tab-p').onclick=()=>setView('p');
+$('tab-a').onclick=()=>setView('a');
 function renderAll(){renderRank();if(admin)renderEditor()}
 async function fetchData(){try{const r=await fetch('/api/absensi',{cache:'no-store'});if(r.ok){data=(await r.json())||{};renderAll()}}catch(e){}}
 async function api(body){
